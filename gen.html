@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="utf-8">
+    <title>防红生成</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { background: #f5f7fa; min-height: 100vh; margin: 0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color: #222;}
+        .container { max-width: 420px; margin: 60px auto 0 auto; box-shadow: 0 4px 24px rgba(0,0,0,0.05); background: #fff; border-radius: 18px; padding: 36px 22px 32px 22px; box-sizing: border-box; position: relative;}
+        h2 { text-align: center; font-weight: 600; font-size: 1.8em; color: #111; letter-spacing: 1px; margin-bottom: 32px;}
+        label { display: block; font-size: 1em; font-weight: 500; margin: 8px 0 7px 4px; color: #444;}
+        input[type="text"] { width: 100%; padding: 13px 12px; border-radius: 12px; border: 1.5px solid #e0e0e0; font-size: 1.09em; background: #f6f8fa; transition: border-color 0.2s; outline: none; margin-bottom: 18px; box-sizing: border-box;}
+        input[type="text"]:focus { border-color: #2d98ff; background: #fff;}
+        .btn { width: 100%; background: linear-gradient(90deg,#3b8cff,#5be7ff); color: #fff; font-size: 1.14em; font-weight: 700; padding: 13px 0; border: none; border-radius: 12px; box-shadow: 0 4px 16px rgba(91,231,255,0.10); cursor: pointer; margin: 10px 0 0 0; transition: background 0.2s, box-shadow 0.2s;}
+        .btn:active { background: linear-gradient(90deg,#509dff,#3b8cff);}
+        .output { background: #f9fafb; border-radius: 10px; border: 1.2px solid #eaeaea; font-size: 1em; min-height: 38px; padding: 9px 12px; margin: 19px 0 10px 0; word-break: break-all; color: #1976d2; text-align: left; display: flex; align-items: center;}
+        .tips { color: #8e8e93; font-size: 0.96em; text-align: center; margin-bottom: 18px;}
+        .warn { color: #fa5252; font-size: 1em; text-align: center; margin-bottom: 12px;}
+        .contact-admin { position: fixed; top: 18px; right: 18px; z-index: 100;}
+        .contact-btn { background: #fff; color: #2aabee; border-radius: 50px; border: 1.4px solid #2aabee; box-shadow: 0 2px 8px rgba(42,171,238,0.07); font-size: 1.15em; padding: 9px 20px 9px 36px; font-weight: 600; text-decoration: none; transition: background 0.1s, color 0.1s; cursor:pointer; background-image: url('https://telegram.org/img/t_logo.svg'); background-size: 19px 19px; background-repeat: no-repeat; background-position: 10px center;}
+        .contact-btn:hover { background: #2aabee; color: #fff;}
+        .contact-list { display: none; position: absolute; top: 46px; right: 0; background: #fff; border: 1px solid #2aabee; border-radius: 10px; box-shadow:0 2px 12px rgba(42,171,238,0.12); min-width:200px; }
+        .contact-list a { display: block; padding: 13px 18px; color: #1976d2; text-decoration: none; font-size: 1.07em; border-bottom: 1px solid #e6f2fb;}
+        .contact-list a:last-child { border-bottom: none; }
+        .contact-list a:hover { background: #f0f8ff; color: #1976d2;}
+        @media (max-width: 600px) { .container { max-width: 99vw; margin: 30px 5px 0 5px;} .contact-btn { font-size: 1em; padding: 7px 13px 7px 32px; top: 11px; right: 9px;}}
+    </style>
+</head>
+<body>
+    <div class="contact-admin">
+        <div class="contact-btn" onclick="toggleContacts()">联系管理员</div>
+        <div class="contact-list" id="contactList">
+            <a href="https://t.me/kin1301" target="_blank">Telegram：kin1301</a>
+            <a href="tencent://AddContact/?fromId=45&fromSubId=1&subcmd=all&uin=1301030688&website=www.oicqzone.com" target="_blank">QQ：1301030688</a>
+            <a href="seagull://user/5030309" target="_blank">海鸥：5030309</a>
+        </div>
+    </div>
+    <div class="container">
+        <h2>防红生成</h2>
+        <div class="tips">输入要防红的网址，点击生成即可。</div>
+        <label for="originUrl">原始链接</label>
+        <input id="originUrl" type="text" autocomplete="off" placeholder="如 http://baidu.com/abc.php">
+        <button class="btn" onclick="genLink()" id="genBtn">生成防红链接</button>
+        <div class="output" id="result"></div>
+        <button class="btn" style="background:#fff;color:#2d98ff;border:1.2px solid #2d98ff;margin-top:0;" onclick="copyResult()">复制防红链接</button>
+    </div>
+    <audio id="clickSound" src="https://cdn.jsdelivr.net/gh/xiangyuecn/Recorder/assets/click.mp3" preload="auto"></audio>
+    <script>
+    let jumpUrl = "";
+    let whiteList = [];
+    window.onload = function() {
+        jumpUrl = localStorage.getItem('jump_url') || "";
+        const listStr = localStorage.getItem('white_list') || "";
+        if(listStr){
+            // 支持 + 或 - 分隔
+            whiteList = listStr.split(/[\+\-]/).map(d=>d.trim().toLowerCase()).filter(Boolean);
+        } else {
+            whiteList = [];
+        }
+    };
+    function playClick() {
+        let audio = document.getElementById('clickSound');
+        if(audio) { audio.currentTime=0; audio.play(); }
+    }
+    // 提取协议+域名部分
+    function getDomain(url) {
+        try {
+            const u = new URL(url);
+            return u.protocol + '//' + u.hostname;
+        } catch {
+            return '';
+        }
+    }
+    // 判断白名单
+    function matchWhiteList(url) {
+        if (!whiteList.length) return false;
+        const domain = getDomain(url);
+        if (!domain) return false;
+        for (let i = 0; i < whiteList.length; i++) {
+            if (domain === whiteList[i]) return true;
+        }
+        return false;
+    }
+    function genLink() {
+        playClick();
+        document.getElementById('result').style.color = "#1976d2";
+        const originUrl = document.getElementById('originUrl').value.trim();
+        if (!/^https?:\/\/.+/.test(originUrl)) {
+            document.getElementById('result').innerText = "请输入正确的网址！";
+            document.getElementById('result').style.color = "#fa5252";
+            return;
+        }
+        if (!jumpUrl) {
+            document.getElementById('result').innerText = "生成失败，请联系管理员";
+            document.getElementById('result').style.color = "#fa5252";
+            return;
+        }
+        if (!matchWhiteList(originUrl)) {
+            document.getElementById('result').innerText = "域名未记录白名单，请联系管理员添加";
+            document.getElementById('result').style.color = "#fa5252";
+            return;
+        }
+        let encoded = "";
+        try { encoded = btoa(originUrl); }
+        catch { document.getElementById('result').innerText = "Base64编码失败，请检查链接格式。"; document.getElementById('result').style.color = "#fa5252"; return; }
+        const final = jumpUrl + (jumpUrl.includes('?') ? '&' : '?') + 'u=' + encoded;
+        document.getElementById('result').innerText = final;
+    }
+    function copyResult() {
+        playClick();
+        const result = document.getElementById('result').innerText;
+        if (!result || result.startsWith("请输入") || result.startsWith("生成失败") || result.startsWith("Base64") || result.startsWith("域名未记录白名单")) {
+            alert("请先生成有效的防红链接！");
+            return;
+        }
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(result).then(() => {
+                alert("已复制！");
+            }, () => {
+                alert("复制失败，请手动复制！");
+            });
+        } else {
+            // 兼容老浏览器
+            const textarea = document.createElement('textarea');
+            textarea.value = result;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert("已复制！");
+        }
+    }
+    function toggleContacts(){
+        let el = document.getElementById('contactList');
+        el.style.display = el.style.display==='block'?'none':'block';
+    }
+    document.body.addEventListener('click',function(e){
+        let el = document.getElementById('contactList');
+        if(el && e.target.className!=='contact-btn' && el.style.display==='block'){
+            el.style.display = 'none';
+        }
+    },true);
+    </script>
+</body>
+</html>
